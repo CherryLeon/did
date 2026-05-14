@@ -1,326 +1,285 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
-import sys
+from datetime import datetime
 
-def print_progress(iteration, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
-    """
-    打印进度条
-    """
-    percent = (iteration / float(total)) * 100
-    filled_length = int(length * iteration // total)
-    bar = fill * filled_length + '-' * (length - filled_length)
-    sys.stdout.write(f'\r{prefix} |{bar}| {percent:.{decimals}f}% {suffix}')
-    sys.stdout.flush()
-    if iteration == total:
-        sys.stdout.write('\n')
-        sys.stdout.flush()
 
-def generate_panel_data(
-    n_customers: int = 514601,
-    n_months: int = 37,
-    treatment_date: str = "2023-03",
-    n_treatment_branches: int = 47,
-    n_control_branches: int = 39
-) -> pd.DataFrame:
-    """
-    生成DID分析所需的面板数据
-    """
-    # 计算时间范围：2022-03 到 2025-03，共37个月
-    start_date = "2022-03"
-    end_date = "2025-03"
-
+def generate_branch_panel_data(
+    n_treatment_branches=47,
+    n_control_branches=39,
+    treatment_date="2023-03",
+    start_date="2022-03",
+    end_date="2025-03",
+    random_seed=42
+):
+    np.random.seed(random_seed)
+    
     date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
     months = [date.strftime("%Y-%m") for date in date_range]
-
-    branches = [f"Branch_{i}" for i in range(1, n_treatment_branches + n_control_branches + 1)]
+    
+    n_branches = n_treatment_branches + n_control_branches
+    branches = ["Branch_{}".format(i) for i in range(1, n_branches + 1)]
     treatment_branches = branches[:n_treatment_branches]
     control_branches = branches[n_treatment_branches:]
-
+    
     data = []
-    total = n_customers
-    for i in range(n_customers):
-        branch = np.random.choice(branches)
-        is_treatment = branch in treatment_branches
+    for branch_id in branches:
+        is_treatment = 1 if branch_id in treatment_branches else 0
         
         for month in months:
-            is_post = month >= treatment_date
+            if month >= treatment_date:
+                is_post = 1
+            else:
+                is_post = 0
             
             row = {
-                'customer_id': f"C{i:06d}",
-                'branch_id': branch,
+                'branch_id': branch_id,
                 'month': month,
-                'is_treatment': int(is_treatment),
-                'is_post': int(is_post),
-                'treatment_post': int(is_treatment and is_post)
+                'is_treatment': is_treatment,
+                'is_post': is_post,
+                'treatment_post': is_treatment * is_post
             }
             data.append(row)
-        
-        # 打印进度条
-        print_progress(i + 1, total, prefix='生成面板数据:', suffix='完成')
-
+    
     df = pd.DataFrame(data)
     return df
 
-def generate_cemi_index(
-    df: pd.DataFrame,
-    base_score: float = 50.0,
-    treatment_effect: float = 5.0,
-    trend_improvement: float = 0.5,
-    noise_level: float = 2.0
-) -> pd.DataFrame:
-    """
-    生成客户经营成效综合指数（CEMI）
-    """
-    df = df.copy()
-    
-    df['month_num'] = pd.to_datetime(df['month']).dt.to_period('M').astype('int64')
-    min_month = df['month_num'].min()
-    df['month_index'] = df['month_num'] - min_month
-    
-    def calculate_cemi(row):
-        score = base_score
-        
-        # 时间趋势
-        score += row['month_index'] * 0.2
-        
-        # 处理效应（政策后）
-        if row['treatment_post']:
-            # 处理效应随时间递增
-            months_since_treatment = row['month_index'] - df[(df['is_treatment'] == 1) & (df['is_post'] == 1)]['month_index'].min()
-            score += treatment_effect + trend_improvement * max(0, months_since_treatment)
-        
-        # 随机噪声
-        score += np.random.normal(0, noise_level)
-        
-        return max(0, score)
-    
-    df['CEMI'] = df.apply(calculate_cemi, axis=1)
-    return df
 
-def generate_scenario_indicators(
-    df: pd.DataFrame,
-    scenarios: List[str] = ['customer_service', 'credit', 'marketing', 'wealth']
-) -> pd.DataFrame:
-    """
-    生成分场景指标
-    """
-    df = df.copy()
+def generate_branch_covariates(df, random_seed=42):
+    np.random.seed(random_seed)
     
-    # 场景效应参数
-    scenario_effects = {
-        'customer_service': 20.0,  # 客服场景效应最大
-        'credit': 15.0,           # 信贷场景效应次之
-        'marketing': 8.0,         # 营销场景效应中等
-        'wealth': 5.0             # 财富管理场景效应较小
-    }
-    
-    for scenario in scenarios:
-        effect_size = scenario_effects[scenario]
-        
-        def calculate_indicator(row):
-            base = np.random.uniform(60, 70)
-            
-            # 时间趋势
-            base += row['month_index'] * 0.1
-            
-            # 处理效应
-            if row['treatment_post']:
-                months_since_treatment = row['month_index'] - df[(df['is_treatment'] == 1) & (df['is_post'] == 1)]['month_index'].min()
-                base += effect_size * (1 + 0.1 * max(0, months_since_treatment))
-            
-            # 随机噪声
-            base += np.random.normal(0, 3)
-            
-            return max(0, min(100, base))
-        
-        df[f'{scenario}_score'] = df.apply(calculate_indicator, axis=1)
-    
-    # 重命名为论文中的指标名称
-    df = df.rename(columns={
-        'customer_service_score': 'service_resolution_rate',  # 智能客服一次解决率
-        'credit_score': 'auto_approval_rate',               # 消费贷款自动审批率
-        'marketing_score': 'marketing_conversion_rate',      # 营销转化率
-        'wealth_score': 'wealth_adoption_rate'              # 财富管理推荐采纳率
-    })
-    
-    return df
-
-def generate_covariates(
-    df: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    生成PSM匹配所需的协变量
-    """
-    df = df.copy()
-    
-    # 客户特征
-    customer_features = []
-    unique_customers = df['customer_id'].unique()
-    total = len(unique_customers)
-    for i, customer in enumerate(unique_customers):
-        features = {
-            'customer_id': customer,
-            'age': np.random.randint(18, 70),
-            'gender': np.random.choice(['M', 'F']),
-            'income_level': np.random.choice(['low', 'medium', 'high'], p=[0.4, 0.4, 0.2]),
-            'tenure_months': np.random.randint(1, 120),
-            'previous_campaigns': np.random.randint(0, 10),
-            'has_loan': np.random.choice([0, 1], p=[0.7, 0.3]),
-            'has_credit_card': np.random.choice([0, 1], p=[0.4, 0.6]),
-            'AUM_level': np.random.choice(['low', 'medium', 'high'], p=[0.6, 0.3, 0.1])
-        }
-        customer_features.append(features)
-        
-        # 打印进度条
-        print_progress(i + 1, total, prefix='生成客户特征:', suffix='完成')
-    
-    customer_df = pd.DataFrame(customer_features)
-    df = df.merge(customer_df, on='customer_id', how='left')
-    
-    # 分行特征
-    branch_features = []
     unique_branches = df['branch_id'].unique()
-    total = len(unique_branches)
-    for i, branch in enumerate(unique_branches):
-        is_treatment = branch in df[df['is_treatment'] == 1]['branch_id'].unique()
+    branch_features = []
+    
+    for branch_id in unique_branches:
+        is_treatment = df[df['branch_id'] == branch_id]['is_treatment'].iloc[0]
+        
+        branch_size = np.random.lognormal(mean=11.72, sigma=0.673)
+        ln_branch_size = np.log(branch_size)
+        
+        city_gdp = np.random.lognormal(mean=13.451, sigma=0.887)
+        ln_city_gdp = np.log(city_gdp)
+        
+        staff_count = np.random.randint(10, 100)
+        
+        if is_treatment:
+            digital_maturity = np.random.normal(50, 15)
+        else:
+            digital_maturity = np.random.normal(45, 15)
+        digital_maturity = max(0, min(100, digital_maturity))
+        
         features = {
-            'branch_id': branch,
-            'branch_size': np.random.choice(['small', 'medium', 'large'], p=[0.3, 0.5, 0.2]),
-            'location_type': np.random.choice(['urban', 'suburban', 'rural'], p=[0.6, 0.3, 0.1]),
-            'staff_count': np.random.randint(10, 100),
-            'prior_performance': np.random.normal(50, 10),
-            'digital_maturity': np.random.normal(50, 15) if is_treatment else np.random.normal(40, 15)
+            'branch_id': branch_id,
+            'ln_branch_size': ln_branch_size,
+            'ln_city_gdp': ln_city_gdp,
+            'staff_count': staff_count,
+            'digital_maturity': digital_maturity
         }
         branch_features.append(features)
-        
-        # 打印进度条
-        print_progress(i + 1, total, prefix='生成分行特征:', suffix='完成')
     
     branch_df = pd.DataFrame(branch_features)
     df = df.merge(branch_df, on='branch_id', how='left')
     
     return df
 
-def generate_complete_dataset(
-    n_customers: int = 514601,
-    n_months: int = 37,
-    treatment_date: str = "2023-03",
-    output_path: Optional[str] = "d:\trae_project\did\raw_data\panel_data.csv"
-) -> pd.DataFrame:
-    """
-    生成完整的实证数据集
-    """
-    # 1. 生成基础面板数据
-    df = generate_panel_data(
-        n_customers=n_customers,
-        n_months=n_months,
-        treatment_date=treatment_date
-    )
+
+def generate_cemi_sub_indicators(df, random_seed=42):
+    np.random.seed(random_seed)
     
-    # 2. 生成CEMI指数
-    df = generate_cemi_index(df)
+    df = df.copy()
+    df['month_date'] = pd.to_datetime(df['month'])
+    df['month_index'] = (df['month_date'] - df['month_date'].min()).dt.days // 30
+    treatment_month_idx = df[df['month'] == '2023-03']['month_index'].iloc[0]
     
-    # 3. 生成分场景指标
-    df = generate_scenario_indicators(df)
+    def generate_indicator(row, base_mean, base_std, effect_size):
+        base = np.random.normal(base_mean, base_std)
+        base += row['month_index'] * 0.05
+        
+        if row['treatment_post']:
+            months_since_treatment = row['month_index'] - treatment_month_idx
+            base += effect_size * (1 + 0.08 * max(0, months_since_treatment))
+        
+        base += np.random.normal(0, base_std * 0.1)
+        return base
     
-    # 4. 生成协变量
-    df = generate_covariates(df)
+    df['marketing_conversion_rate'] = df.apply(
+        lambda row: generate_indicator(row, 2.3, 0.7, 1.5), axis=1
+    ).clip(0, 10)
     
-    # 5. 保存数据
-    if output_path:
-        df.to_csv(output_path, index=False)
-        print(f"数据已保存至: {output_path}")
+    df['cac_reduction_rate'] = df.apply(
+        lambda row: generate_indicator(row, 0, 5, 8), axis=1
+    ).clip(-20, 30)
+    
+    df['retention_rate'] = df.apply(
+        lambda row: generate_indicator(row, 61.3, 8.4, 5), axis=1
+    ).clip(0, 100)
+    
+    df['aum_growth_rate'] = df.apply(
+        lambda row: generate_indicator(row, 0.87, 0.34, 0.5), axis=1
+    ).clip(-5, 10)
+    
+    df['cross_sell_rate'] = df.apply(
+        lambda row: generate_indicator(row, 8.6, 2.3, 2), axis=1
+    ).clip(0, 30)
     
     return df
 
-def validate_dataset(
-    df: pd.DataFrame,
-    treatment_date: str = "2023-03"
-) -> Dict:
-    """
-    验证生成的数据集质量
-    """
+
+def synthesize_cemi_from_sub_indicators(df):
+    df = df.copy()
+    
+    sub_indicators = [
+        'marketing_conversion_rate',
+        'cac_reduction_rate',
+        'retention_rate',
+        'aum_growth_rate',
+        'cross_sell_rate'
+    ]
+    
+    pre_df = df[df['is_post'] == 0]
+    std_indicators = []
+    for indicator in sub_indicators:
+        pre_mean = pre_df[indicator].mean()
+        pre_std = pre_df[indicator].std()
+        df['{}_std'.format(indicator)] = (df[indicator] - pre_mean) / pre_std
+        std_indicators.append('{}_std'.format(indicator))
+    
+    df['CEMI'] = df[std_indicators].mean(axis=1) * 10 + 50
+    df['CEMI'] = df['CEMI'].clip(0, 100)
+    
+    return df
+
+
+def generate_scenario_indicators(df, random_seed=42):
+    np.random.seed(random_seed)
+    df = df.copy()
+    
+    treatment_month_idx = df[df['month'] == '2023-03']['month_index'].iloc[0]
+    
+    def generate_scenario_indicator(row, base_mean, base_std, effect_size):
+        base = np.random.normal(base_mean, base_std)
+        base += row['month_index'] * 0.08
+        
+        if row['treatment_post']:
+            months_since_treatment = row['month_index'] - treatment_month_idx
+            base += effect_size * (1 + 0.1 * max(0, months_since_treatment))
+        
+        base += np.random.normal(0, base_std * 0.08)
+        return max(0, min(100, base))
+    
+    df['service_resolution_rate'] = df.apply(
+        lambda row: generate_scenario_indicator(row, 67.4, 6.8, 30.25), axis=1
+    )
+    
+    df['auto_approval_rate'] = df.apply(
+        lambda row: generate_scenario_indicator(row, 64.3, 8.2, 27.36), axis=1
+    )
+    
+    df['wealth_adoption_rate'] = df.apply(
+        lambda row: generate_scenario_indicator(row, 45, 8, 10.75), axis=1
+    )
+    
+    return df
+
+
+def calculate_pre_treatment_cemi_mean(df):
+    df = df.copy()
+    
+    pre_df = df[df['is_post'] == 0]
+    pre_cemi_by_branch = pre_df.groupby('branch_id')['CEMI'].mean().reset_index()
+    pre_cemi_by_branch.columns = ['branch_id', 'pre_treatment_cemi_mean']
+    df = df.merge(pre_cemi_by_branch, on='branch_id', how='left')
+    
+    return df
+
+
+def generate_complete_branch_dataset(
+    n_treatment_branches=47,
+    n_control_branches=39,
+    output_path="d:\\trae_project\\did\\raw_data\\branch_panel_data.csv",
+    random_seed=42
+):
+    print("开始生成分行粒度面板数据...")
+    
+    df = generate_branch_panel_data(
+        n_treatment_branches=n_treatment_branches,
+        n_control_branches=n_control_branches,
+        random_seed=random_seed
+    )
+    print("[OK] 基础面板生成完成：{} 条记录，{} 家分行".format(len(df), df['branch_id'].nunique()))
+    
+    df = generate_branch_covariates(df, random_seed=random_seed)
+    print("[OK] 分行协变量生成完成")
+    
+    df = generate_cemi_sub_indicators(df, random_seed=random_seed)
+    print("[OK] CEMI子指标生成完成")
+    
+    df = synthesize_cemi_from_sub_indicators(df)
+    print("[OK] CEMI合成完成")
+    
+    df = generate_scenario_indicators(df, random_seed=random_seed)
+    print("[OK] 分场景指标生成完成")
+    
+    df = calculate_pre_treatment_cemi_mean(df)
+    print("[OK] 政策前CEMI均值计算完成")
+    
+    if output_path:
+        df.to_csv(output_path, index=False)
+        print("\n数据已保存至: {}".format(output_path))
+    
+    return df
+
+
+def validate_branch_dataset(df):
     validation = {
         'sample_size': len(df),
-        'unique_customers': df['customer_id'].nunique(),
+        'unique_branches': df['branch_id'].nunique(),
         'time_periods': df['month'].nunique(),
         'treatment_branches': df[df['is_treatment'] == 1]['branch_id'].nunique(),
         'control_branches': df[df['is_treatment'] == 0]['branch_id'].nunique(),
-        'pre_treatment_stats': {},
-        'post_treatment_stats': {},
-        'parallel_trend_check': {},
-        'treatment_effect_check': {}
+        'pre_treatment_cemi_mean_treatment': 0,
+        'pre_treatment_cemi_mean_control': 0,
+        'pre_treatment_cemi_diff': 0,
+        'cemi_range': [0, 0]
     }
     
-    # 政策前统计
-    pre_df = df[df['month'] < treatment_date]
-    validation['pre_treatment_stats'] = {
-        'control_mean_cemi': pre_df[pre_df['is_treatment'] == 0]['CEMI'].mean(),
-        'treatment_mean_cemi': pre_df[pre_df['is_treatment'] == 1]['CEMI'].mean(),
-        'mean_difference': abs(pre_df[pre_df['is_treatment'] == 1]['CEMI'].mean() - 
-                             pre_df[pre_df['is_treatment'] == 0]['CEMI'].mean())
-    }
-    
-    # 政策后统计
-    post_df = df[df['month'] >= treatment_date]
-    validation['post_treatment_stats'] = {
-        'control_mean_cemi': post_df[post_df['is_treatment'] == 0]['CEMI'].mean(),
-        'treatment_mean_cemi': post_df[post_df['is_treatment'] == 1]['CEMI'].mean(),
-        'mean_difference': abs(post_df[post_df['is_treatment'] == 1]['CEMI'].mean() - 
-                             post_df[post_df['is_treatment'] == 0]['CEMI'].mean())
-    }
-    
-    # 平行趋势检查
-    validation['parallel_trend_check']['pre_treatment_diff'] = validation['pre_treatment_stats']['mean_difference']
-    validation['parallel_trend_check']['parallel_trend_satisfied'] = validation['pre_treatment_stats']['mean_difference'] < 2.0
-    
-    # 处理效应检查
-    validation['treatment_effect_check']['post_treatment_diff'] = validation['post_treatment_stats']['mean_difference']
-    validation['treatment_effect_check']['treatment_effect_satisfied'] = validation['post_treatment_stats']['mean_difference'] > 5.0
+    pre_df = df[df['is_post'] == 0]
+    validation['pre_treatment_cemi_mean_treatment'] = pre_df[pre_df['is_treatment'] == 1]['CEMI'].mean()
+    validation['pre_treatment_cemi_mean_control'] = pre_df[pre_df['is_treatment'] == 0]['CEMI'].mean()
+    validation['pre_treatment_cemi_diff'] = abs(validation['pre_treatment_cemi_mean_treatment'] - validation['pre_treatment_cemi_mean_control'])
+    validation['cemi_range'] = [df['CEMI'].min(), df['CEMI'].max()]
     
     return validation
 
-# 测试数据生成
+
 if __name__ == "__main__":
-    print("开始生成测试数据...")
-    df = generate_complete_dataset(n_customers=1000, n_months=37, treatment_date='2023-03')
-    print(f"数据生成完成，共 {len(df)} 条记录")
+    print("="*60)
+    print("    生成式AI在招商银行零售客户经营中的应用成效分析")
+    print("    分行粒度数据生成器")
+    print("="*60)
     
-    # 验证数据质量
-    validation = validate_dataset(df, treatment_date='2023-03')
+    df = generate_complete_branch_dataset(random_seed=42)
+    validation = validate_branch_dataset(df)
     
-    print('\n数据验证结果:')
-    print(f'样本量: {validation["sample_size"]}')
-    print(f'唯一客户数: {validation["unique_customers"]}')
-    print(f'时间周期数: {validation["time_periods"]}')
-    print(f'处理组分行数: {validation["treatment_branches"]}')
-    print(f'对照组分行数: {validation["control_branches"]}')
-    print(f'政策前处理组均值: {validation["pre_treatment_stats"]["treatment_mean_cemi"]:.2f}')
-    print(f'政策前对照组均值: {validation["pre_treatment_stats"]["control_mean_cemi"]:.2f}')
-    print(f'政策前差异: {validation["pre_treatment_stats"]["mean_difference"]:.2f}')
-    print(f'政策后处理组均值: {validation["post_treatment_stats"]["treatment_mean_cemi"]:.2f}')
-    print(f'政策后对照组均值: {validation["post_treatment_stats"]["control_mean_cemi"]:.2f}')
-    print(f'政策后差异: {validation["post_treatment_stats"]["mean_difference"]:.2f}')
-    print(f'平行趋势满足: {validation["parallel_trend_check"]["parallel_trend_satisfied"]}')
-    print(f'处理效应满足: {validation["treatment_effect_check"]["treatment_effect_satisfied"]}')
+    print("\n" + "-"*60)
+    print("数据验证结果:")
+    print("-"*60)
+    print("总观测值: {:,}".format(validation['sample_size']))
+    print("分行数: {}".format(validation['unique_branches']))
+    print("时间周期数: {}".format(validation['time_periods']))
+    print("处理组分行数: {}".format(validation['treatment_branches']))
+    print("对照组分行数: {}".format(validation['control_branches']))
+    print("\n政策前CEMI均值 (处理组): {:.2f}".format(validation['pre_treatment_cemi_mean_treatment']))
+    print("政策前CEMI均值 (对照组): {:.2f}".format(validation['pre_treatment_cemi_mean_control']))
+    print("政策前差异: {:.2f}".format(validation['pre_treatment_cemi_diff']))
+    print("CEMI范围: [{:.2f}, {:.2f}]".format(validation['cemi_range'][0], validation['cemi_range'][1]))
     
-    # 检查变量覆盖
-    print('\n变量覆盖检查:')
-    required_vars = ['customer_id', 'branch_id', 'month', 'is_treatment', 'is_post', 'treatment_post', 'CEMI', 'service_resolution_rate', 'auto_approval_rate', 'marketing_conversion_rate', 'wealth_adoption_rate', 'age', 'gender', 'income_level', 'tenure_months', 'previous_campaigns', 'has_loan', 'has_credit_card', 'AUM_level', 'branch_size', 'location_type', 'staff_count', 'prior_performance', 'digital_maturity']
-    for var in required_vars:
-        if var in df.columns:
-            print(f'✓ {var}')
-        else:
-            print(f'✗ {var}')
+    print("\n数据预览 (前3行):")
+    print(df[['branch_id', 'month', 'is_treatment', 'is_post', 'treatment_post', 'CEMI']].head(3))
     
-    # 检查时间范围
-    print('\n时间范围检查:')
-    min_month = df['month'].min()
-    max_month = df['month'].max()
-    print(f'最小月份: {min_month}')
-    print(f'最大月份: {max_month}')
-    print(f'时间跨度: {df["month"].nunique()} 个月')
+    print("\n所有变量:")
+    for col in sorted(df.columns):
+        print("  - {}".format(col))
     
-    print('\n测试完成！')
+    print("\n" + "="*60)
+    print("数据生成完成！")
+    print("="*60)
