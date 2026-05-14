@@ -1,0 +1,5 @@
+{
+  "name": "psm-matching",
+  "description": "倾向得分匹配（PSM）的实施、平衡性检验和报告规范。用于DID前确保处理组与对照组可比性。",
+  "version": "1.0"
+}

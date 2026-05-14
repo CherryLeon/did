@@ -1,0 +1,5 @@
+{
+  "name": "data-generator",
+  "description": "基于论文背景和实证要求生成DID/PSM分析所需数据，包括面板数据、CEMI指数和分场景指标。",
+  "version": "1.0"
+}

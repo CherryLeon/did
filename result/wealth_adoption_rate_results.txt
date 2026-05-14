@@ -1,0 +1,27 @@
+                             OLS Regression Results                             
+================================================================================
+Dep. Variable:     wealth_adoption_rate   R-squared:                       0.577
+Model:                              OLS   Adj. R-squared:                  0.577
+Method:                   Least Squares   F-statistic:                 1.635e+04
+Date:                  Fri, 15 May 2026   Prob (F-statistic):               0.00
+Time:                          00:18:29   Log-Likelihood:            -1.0808e+05
+No. Observations:                 36000   AIC:                         2.162e+05
+Df Residuals:                     35996   BIC:                         2.162e+05
+Df Model:                             3                                         
+Covariance Type:              nonrobust                                         
+==================================================================================
+                     coef    std err          t      P>|t|      [0.025      0.975]
+----------------------------------------------------------------------------------
+const             65.4753      0.065   1001.977      0.000      65.347      65.603
+is_treatment       0.0771      0.089      0.865      0.387      -0.098       0.252
+is_post            1.8361      0.080     22.942      0.000       1.679       1.993
+treatment_post    10.7541      0.109     98.468      0.000      10.540      10.968
+==============================================================================
+Omnibus:                        2.181   Durbin-Watson:                   1.536
+Prob(Omnibus):                  0.336   Jarque-Bera (JB):                2.163
+Skew:                           0.016   Prob(JB):                        0.339
+Kurtosis:                       3.022   Cond. No.                         8.75
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.

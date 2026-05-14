@@ -1,0 +1,5 @@
+{
+  "name": "robustness-test",
+  "description": "DID模型稳健性检验的实施规范，包括安慰剂检验、排除政策干扰、样本调整等。",
+  "version": "1.0"
+}

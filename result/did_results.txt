@@ -1,0 +1,27 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:                   CEMI   R-squared:                       0.744
+Model:                            OLS   Adj. R-squared:                  0.744
+Method:                 Least Squares   F-statistic:                 3.479e+04
+Date:                Fri, 15 May 2026   Prob (F-statistic):               0.00
+Time:                        00:18:07   Log-Likelihood:                -97572.
+No. Observations:               36000   AIC:                         1.952e+05
+Df Residuals:                   35996   BIC:                         1.952e+05
+Df Model:                           3                                         
+Covariance Type:            nonrobust                                         
+==================================================================================
+                     coef    std err          t      P>|t|      [0.025      0.975]
+----------------------------------------------------------------------------------
+const             51.1391      0.049   1047.770      0.000      51.043      51.235
+is_treatment      -0.0346      0.067     -0.519      0.604      -0.165       0.096
+is_post            3.5687      0.060     59.701      0.000       3.452       3.686
+treatment_post    10.7415      0.082    131.680      0.000      10.582      10.901
+==============================================================================
+Omnibus:                      356.473   Durbin-Watson:                   0.836
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):              603.978
+Skew:                           0.001   Prob(JB):                    7.04e-132
+Kurtosis:                       3.635   Cond. No.                         8.75
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.

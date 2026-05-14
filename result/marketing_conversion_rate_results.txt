@@ -1,0 +1,27 @@
+                                OLS Regression Results                               
+=====================================================================================
+Dep. Variable:     marketing_conversion_rate   R-squared:                       0.708
+Model:                                   OLS   Adj. R-squared:                  0.708
+Method:                        Least Squares   F-statistic:                 2.915e+04
+Date:                       Fri, 15 May 2026   Prob (F-statistic):               0.00
+Time:                               00:18:29   Log-Likelihood:            -1.1301e+05
+No. Observations:                      36000   AIC:                         2.260e+05
+Df Residuals:                          35996   BIC:                         2.261e+05
+Df Model:                                  3                                         
+Covariance Type:                   nonrobust                                         
+==================================================================================
+                     coef    std err          t      P>|t|      [0.025      0.975]
+----------------------------------------------------------------------------------
+const             65.4662      0.075    873.443      0.000      65.319      65.613
+is_treatment       0.1862      0.102      1.820      0.069      -0.014       0.387
+is_post            1.8801      0.092     20.481      0.000       1.700       2.060
+treatment_post    16.9924      0.125    135.648      0.000      16.747      17.238
+==============================================================================
+Omnibus:                       34.411   Durbin-Watson:                   1.252
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):               39.572
+Skew:                          -0.014   Prob(JB):                     2.55e-09
+Kurtosis:                       3.160   Cond. No.                         8.75
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.

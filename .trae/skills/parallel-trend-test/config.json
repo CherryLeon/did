@@ -1,0 +1,5 @@
+{
+  "name": "parallel-trend-test",
+  "description": "平行趋势假设检验的实施规范，包括事件研究法、联合F检验和可视化。",
+  "version": "1.0"
+}
